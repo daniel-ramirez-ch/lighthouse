@@ -15,10 +15,10 @@ env:
   PINNED_NIGHTLY: nightly-2022-05-20
 jobs:
   compile-with-beta-compiler:
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v3
-        - name: Use Rust beta
-          run: rustup override set 1.65
-        - name: Run make
-          run: make
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Rust beta
+      run: rustup override set 1.65
+    - name: Run make
+      run: make
