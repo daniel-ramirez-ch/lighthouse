@@ -384,3 +384,11 @@ jobs:
     env:
       # Allow warnings on Nightly
       RUSTFLAGS: ""
+  compile-with-beta-compiler:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v3
+        - name: Use Rust beta
+          run: rustup override set beta
+        - name: Run make
+          run: make
