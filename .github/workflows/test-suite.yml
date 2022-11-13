@@ -1,13 +1,7 @@
 name: test-suite
 
-on:
-  push:
-    branches:
-      - stable
-      - staging
-      - trying
-      - 'pr/*'
-  pull_request:
+on: [push]
+
 env:
   # Deny warnings in CI
   RUSTFLAGS: "-D warnings"
