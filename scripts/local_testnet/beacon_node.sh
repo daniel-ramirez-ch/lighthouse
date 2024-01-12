@@ -9,11 +9,13 @@ set -Eeuo pipefail
 source ./vars.env
 
 SUBSCRIBE_ALL_SUBNETS=
+LIGHTHOUSE_BINARY=lighthouse
 DEBUG_LEVEL=${DEBUG_LEVEL:-info}
 
 # Get options
-while getopts "d:sh" flag; do
+while getopts "b:d:sh" flag; do
   case "${flag}" in
+    b) LIGHTHOUSE_BINARY=${OPTARG};;
     d) DEBUG_LEVEL=${OPTARG};;
     s) SUBSCRIBE_ALL_SUBNETS="--subscribe-all-subnets";;
     h)
@@ -22,6 +24,7 @@ while getopts "d:sh" flag; do
        echo "usage: $0 <Options> <DATADIR> <NETWORK-PORT> <HTTP-PORT>"
        echo
        echo "Options:"
+       echo "   -b: LIGHTHOUSE_BINARY, specify the lighthouse binary to use, default 'lighthouse'"
        echo "   -s: pass --subscribe-all-subnets to 'lighthouse bn ...', default is not passed"
        echo "   -d: DEBUG_LEVEL, default info"
        echo "   -h: this help"
@@ -45,9 +48,7 @@ http_port=${@:$OPTIND+3:1}
 execution_endpoint=${@:$OPTIND+4:1}
 execution_jwt=${@:$OPTIND+5:1}
 
-lighthouse_binary=lighthouse
-
-exec $lighthouse_binary \
+exec $LIGHTHOUSE_BINARY \
 	--debug-level $DEBUG_LEVEL \
 	bn \
 	$SUBSCRIBE_ALL_SUBNETS \

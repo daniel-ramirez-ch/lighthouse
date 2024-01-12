@@ -9,6 +9,7 @@ source ./vars.env
 ulimit -n 65536
 
 # VC_COUNT is defaulted in vars.env
+# TOTAL_COUNT is defaulted in vars.env
 DEBUG_LEVEL=${DEBUG_LEVEL:-info}
 BUILDER_PROPOSALS=
 
@@ -44,6 +45,7 @@ genesis_file=${@:$OPTIND+0:1}
 
 # Init some constants
 PID_FILE=$TESTNET_DIR/PIDS.pid
+PID_FILE_STALE=$TESTNET_DIR/PIDS_STALE.pid
 LOG_DIR=$TESTNET_DIR
 
 # Stop local testnet and remove $PID_FILE
@@ -97,6 +99,10 @@ execute_command_add_PID() {
     echo "$!" >> $PID_FILE
 }
 
+execute_command_add_PID_STALE() {
+    execute_command $@
+    echo "$!" >> $PID_FILE_STALE
+}
 
 # Setup data
 echo "executing: ./setup.sh >> $LOG_DIR/setup.log"
@@ -135,10 +141,26 @@ sleeping 20
 sed -i 's/"shanghaiTime".*$/"shanghaiTime": 0,/g' $genesis_file
 sed -i 's/"cancunTime".*$/"cancunTime": 0,/g' $genesis_file
 
+# Start beacon nodes. Which:
+# - Are running the ligthouse version that is being tested.
+# - Have the fork epoch set for the capella and deneb hardforks.
 for (( bn=1; bn<=$BN_COUNT; bn++ )); do
     secret=$DATADIR/geth_datadir$bn/geth/jwtsecret
     echo $secret
     execute_command_add_PID beacon_node_$bn.log ./beacon_node.sh $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
+done
+
+# Start stale nodes. Which:
+# - Are running `lighthouse_prev`. Which is expected to be a binary of a
+#   previous version of lighthouse available in your machine.
+# - Have their `genesis.json` config file fork times reset (to 0).
+for (( el=$BN_COUNT+1; el<=$STALE_BN_COUNT+$BN_COUNT; el++ )); do
+    execute_command_add_PID_STALE geth_$el.log ./geth.sh $DATADIR/geth_datadir$el $((EL_base_network + $el)) $((EL_base_http + $el)) $((EL_base_auth_http + $el)) $genesis_file
+done
+for (( bn=$BN_COUNT+1; bn<=$STALE_BN_COUNT+$BN_COUNT; bn++ )); do
+    secret=$DATADIR/geth_datadir$bn/geth/jwtsecret
+    echo $secret
+    execute_command_add_PID_STALE beacon_node_$bn.log ./beacon_node.sh -b lighthouse_prev $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
 done
 
 # Start requested number of validator clients
@@ -147,3 +169,4 @@ for (( vc=1; vc<=$VC_COUNT; vc++ )); do
 done
 
 echo "Started!"
+
