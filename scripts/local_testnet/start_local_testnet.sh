@@ -12,6 +12,7 @@ ulimit -n 65536
 # TOTAL_COUNT is defaulted in vars.env
 DEBUG_LEVEL=${DEBUG_LEVEL:-info}
 BUILDER_PROPOSALS=
+TOTAL_COUNT=$BN_COUNT+$STALE_BN_COUNT
 
 # Get options
 while getopts "v:d:ph" flag; do
@@ -20,9 +21,10 @@ while getopts "v:d:ph" flag; do
     d) DEBUG_LEVEL=${OPTARG};;
     p) BUILDER_PROPOSALS="-p";;
     h)
-        validators=$(( $VALIDATOR_COUNT / $BN_COUNT ))
+        validators=$(( $VALIDATOR_COUNT / $TOTAL_COUNT ))
         echo "Start local testnet, defaults: 1 eth1 node, $BN_COUNT beacon nodes,"
-        echo "and $VC_COUNT validator clients with each vc having $validators validators."
+        echo "$STALE_BN_COUNT stale nodes and $VC_COUNT validator clients with"
+        echo "each vc having $validators validators."
         echo
         echo "usage: $0 <Options>"
         echo
@@ -36,8 +38,8 @@ while getopts "v:d:ph" flag; do
   esac
 done
 
-if (( $VC_COUNT > $BN_COUNT )); then
-    echo "Error $VC_COUNT is too large, must be <= BN_COUNT=$BN_COUNT"
+if (( $VC_COUNT > $TOTAL_COUNT )); then
+    echo "Error $VC_COUNT is too large, must be <= TOTAL_COUNT=$TOTAL_COUNT"
     exit
 fi
 
@@ -56,10 +58,10 @@ LOG_DIR=$TESTNET_DIR
 # even before its done.
 ./clean.sh
 mkdir -p $LOG_DIR
-for (( bn=1; bn<=$BN_COUNT; bn++ )); do
+for (( bn=1; bn<=$TOTAL_COUNT; bn++ )); do
     touch $LOG_DIR/beacon_node_$bn.log
 done
-for (( el=1; el<=$BN_COUNT; el++ )); do
+for (( el=1; el<=$TOTAL_COUNT; el++ )); do
     touch $LOG_DIR/geth_$el.log
 done
 for (( vc=1; vc<=$VC_COUNT; vc++ )); do
@@ -129,7 +131,7 @@ EL_base_network=7000
 EL_base_http=6000
 EL_base_auth_http=5000
 
-(( $VC_COUNT < $BN_COUNT )) && SAS=-s || SAS=
+(( $VC_COUNT < $TOTAL_COUNT )) && SAS=-s || SAS=
 
 for (( el=1; el<=$BN_COUNT; el++ )); do
     execute_command_add_PID geth_$el.log ./geth.sh $DATADIR/geth_datadir$el $((EL_base_network + $el)) $((EL_base_http + $el)) $((EL_base_auth_http + $el)) $genesis_file
@@ -154,18 +156,24 @@ done
 # - Are running `lighthouse_prev`. Which is expected to be a binary of a
 #   previous version of lighthouse available in your machine.
 # - Have their `genesis.json` config file fork times reset (to 0).
-for (( el=$BN_COUNT+1; el<=$STALE_BN_COUNT+$BN_COUNT; el++ )); do
+for (( el=$BN_COUNT+1; el<=$TOTAL_COUNT; el++ )); do
     execute_command_add_PID_STALE geth_$el.log ./geth.sh $DATADIR/geth_datadir$el $((EL_base_network + $el)) $((EL_base_http + $el)) $((EL_base_auth_http + $el)) $genesis_file
 done
-for (( bn=$BN_COUNT+1; bn<=$STALE_BN_COUNT+$BN_COUNT; bn++ )); do
+for (( bn=$BN_COUNT+1; bn<=$TOTAL_COUNT; bn++ )); do
     secret=$DATADIR/geth_datadir$bn/geth/jwtsecret
     echo $secret
     execute_command_add_PID_STALE beacon_node_$bn.log ./beacon_node.sh -b lighthouse_prev $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
 done
 
-# Start requested number of validator clients
+# Start requested number of validator clients. Starts one on a non-stale node
+# then one on a stale node. eg. If VC_COUNT=2, BN_COUNT=2 and STALE_BN_COUNT=2
+# then we get one non-stale with a validator and one stale with a validator.
 for (( vc=1; vc<=$VC_COUNT; vc++ )); do
-    execute_command_add_PID validator_node_$vc.log ./validator_client.sh $BUILDER_PROPOSALS -d $DEBUG_LEVEL $DATADIR/node_$vc http://localhost:$((BN_http_port_base + $vc))
+    if [ $((vc % 2)) -ne 0 ]; then
+      execute_command_add_PID validator_node_$vc.log ./validator_client.sh $BUILDER_PROPOSALS -d $DEBUG_LEVEL $DATADIR/node_$vc http://localhost:$((BN_http_port_base + vc))
+    else
+      execute_command_add_PID_STALE validator_node_$vc.log ./validator_client.sh $BUILDER_PROPOSALS -d $DEBUG_LEVEL $DATADIR/node_$vc http://localhost:$((BN_http_port_base + vc))
+    fi
 done
 
 echo "Started!"
