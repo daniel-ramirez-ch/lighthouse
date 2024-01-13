@@ -165,11 +165,12 @@ for (( bn=$BN_COUNT+1; bn<=$TOTAL_COUNT; bn++ )); do
     execute_command_add_PID_STALE beacon_node_$bn.log ./beacon_node.sh -b lighthouse_prev $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
 done
 
-# Start requested number of validator clients. Starts one on a non-stale node
-# then one on a stale node. eg. If VC_COUNT=2, BN_COUNT=2 and STALE_BN_COUNT=2
-# then we get one non-stale with a validator and one stale with a validator.
+# Start requested number of validator clients.
+# Validators are assigned to all non-stale nodes before being assigned to
+# stale nodes. So, if you want validators on stale nodes, you'll need
+# VC_COUNT > BN_COUNT
 for (( vc=1; vc<=$VC_COUNT; vc++ )); do
-    if [ $((vc % 2)) -ne 0 ]; then
+    if [ $vc -le $BN_COUNT ]; then
       execute_command_add_PID validator_node_$vc.log ./validator_client.sh $BUILDER_PROPOSALS -d $DEBUG_LEVEL $DATADIR/node_$vc http://localhost:$((BN_http_port_base + vc))
     else
       execute_command_add_PID_STALE validator_node_$vc.log ./validator_client.sh $BUILDER_PROPOSALS -d $DEBUG_LEVEL $DATADIR/node_$vc http://localhost:$((BN_http_port_base + vc))
