@@ -67,9 +67,6 @@ execute_command_add_PID() {
     echo "$!" >> $PID_FILE
 }
 
-# Call setup_time.sh to update future hardforks time in the EL genesis file based on the CL genesis time
-./setup_time.sh genesis.json
-
 # Start beacon nodes
 BN_udp_tcp_base=9000
 BN_http_port_base=8000
@@ -83,10 +80,6 @@ for (( el=$BN_COUNT+1; el<=$TOTAL_COUNT; el++ )); do
 done
 
 sleeping 20
-
-# Reset the `genesis.json` config file fork times.
-sed -i 's/"shanghaiTime".*$/"shanghaiTime": 0,/g' $genesis_file
-sed -i 's/"cancunTime".*$/"cancunTime": 0,/g' $genesis_file
 
 (( $VC_COUNT < $TOTAL_COUNT )) && SAS=-s || SAS=
 

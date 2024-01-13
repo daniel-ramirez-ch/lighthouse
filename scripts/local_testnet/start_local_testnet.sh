@@ -9,7 +9,7 @@ source ./vars.env
 ulimit -n 65536
 
 # VC_COUNT is defaulted in vars.env
-# TOTAL_COUNT is defaulted in vars.env
+# STALE_BN_COUNT and TOTAL_COUNT are defaulted in vars.env
 DEBUG_LEVEL=${DEBUG_LEVEL:-info}
 BUILDER_PROPOSALS=
 TOTAL_COUNT=$BN_COUNT+$STALE_BN_COUNT
@@ -133,7 +133,11 @@ EL_base_auth_http=5000
 
 (( $VC_COUNT < $TOTAL_COUNT )) && SAS=-s || SAS=
 
-for (( el=1; el<=$BN_COUNT; el++ )); do
+# Not sure if geth needs to have the fork epoch not configured for the stale nodes.
+# I'm assuming no, so all ELs are started with the epocks set.
+# (that is, before resetting the genesis.json file fork times a little further down
+# this file.)
+for (( el=1; el<=$TOTAL_COUNT; el++ )); do
     execute_command_add_PID geth_$el.log ./geth.sh $DATADIR/geth_datadir$el $((EL_base_network + $el)) $((EL_base_http + $el)) $((EL_base_auth_http + $el)) $genesis_file
 done
 
@@ -152,17 +156,15 @@ for (( bn=1; bn<=$BN_COUNT; bn++ )); do
     execute_command_add_PID beacon_node_$bn.log ./beacon_node.sh $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
 done
 
-# Start stale nodes. Which:
-# - Are running `lighthouse_prev`. Which is expected to be a binary of a
-#   previous version of lighthouse available in your machine.
-# - Have their `genesis.json` config file fork times reset (to 0).
-for (( el=$BN_COUNT+1; el<=$TOTAL_COUNT; el++ )); do
-    execute_command_add_PID_STALE geth_$el.log ./geth.sh $DATADIR/geth_datadir$el $((EL_base_network + $el)) $((EL_base_http + $el)) $((EL_base_auth_http + $el)) $genesis_file
-done
+# Start stale nodes.
+# I haven't messed witht the fork epochs. Right now the stale nodes start on the
+# previous released version then get updated to the code being tested.
+# Log files are named beacon_node_stale_* to avoid them being overwritten after
+# restart.
 for (( bn=$BN_COUNT+1; bn<=$TOTAL_COUNT; bn++ )); do
     secret=$DATADIR/geth_datadir$bn/geth/jwtsecret
     echo $secret
-    execute_command_add_PID_STALE beacon_node_$bn.log ./beacon_node.sh -b lighthouse_prev $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
+    execute_command_add_PID_STALE beacon_node_stale_$bn.log ./beacon_node.sh -b lighthouse_prev $SAS -d $DEBUG_LEVEL $DATADIR/node_$bn $((BN_udp_tcp_base + $bn)) $((BN_udp_tcp_base + $bn + 100)) $((BN_http_port_base + $bn)) http://localhost:$((EL_base_auth_http + $bn)) $secret
 done
 
 # Start requested number of validator clients.
