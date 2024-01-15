@@ -75,10 +75,6 @@ EL_base_network=7000
 EL_base_http=6000
 EL_base_auth_http=5000
 
-for (( el=$BN_COUNT+1; el<=$TOTAL_COUNT; el++ )); do
-    execute_command_add_PID geth_$el.log ./geth.sh $DATADIR/geth_datadir$el $((EL_base_network + $el)) $((EL_base_http + $el)) $((EL_base_auth_http + $el)) $genesis_file
-done
-
 sleeping 20
 
 (( $VC_COUNT < $TOTAL_COUNT )) && SAS=-s || SAS=
